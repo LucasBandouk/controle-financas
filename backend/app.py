@@ -21,6 +21,7 @@ def init_db():
                     descricao TEXT,
                     tipo TEXT,
                     usuario_id INTEGER,
+                    categoria_id INTEGER,
                     FOREIGN KEY(usuario_id) REFERENCES usuarios(id))''')
     c.execute("INSERT OR IGNORE INTO usuarios (username, senha) VALUES (?, ?)",
               ("test", hashlib.sha256("senha123".encode()).hexdigest()))
@@ -133,6 +134,28 @@ def get_transacoes_por_categoria(usuario_id, categoria_id):
                    "tipo": row[3], "categoria": row[4]} for row in c.fetchall()]
     conn.close()
     return jsonify(transacoes)
+
+@app.route("/resumo/<int:usuario_id>", methods=["GET"])
+def resumo_financeiro(usuario_id):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+
+    c.execute("""SELECT SUM(valor) FROM transacoes 
+                 WHERE usuario_id=? AND tipo='receita'""", (usuario_id,))
+    total_receitas = c.fetchone()[0] or 0.0
+
+    c.execute("""SELECT SUM(valor) FROM transacoes 
+                 WHERE usuario_id=? AND tipo='despesa'""", (usuario_id,))
+    total_despesas = c.fetchone()[0] or 0.0
+
+    saldo = total_receitas - total_despesas
+
+    conn.close()
+    return jsonify({
+        "total_receitas": round(total_receitas, 2),
+        "total_despesas": round(total_despesas, 2),
+        "saldo": round(saldo, 2)
+    })
 
 if __name__ == "__main__":
     init_db()
