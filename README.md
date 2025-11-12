@@ -18,7 +18,16 @@ O backend estará rodando em `http://127.0.0.1:5000`.
 - **Usuário:** `test`
 - **Senha:** `senha123`
 
-### Funcionalidades da Entrega 1
+### Funcionalidades da Entrega 1 (Sprint 1)
 - Login de usuário.
 - Cadastro de transações (receita/despesa).
 - Listagem de transações.
+
+### ✅ Entrega 2 (Sprint 2)
+- Cadastro de categorias
+- Filtro de transações por categoria
+
+### ✅ Entrega 3 (Sprint 3)
+- Cálculo automático de saldo financeiro
+- Exibição de total de receitas, despesas e saldo no frontend
+- Estilização do saldo (verde para positivo, vermelho para negativo)
