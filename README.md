@@ -1,6 +1,3 @@
-
-# Controle de Finanças - Entrega 1 (Flask + SQLite)
-
 ## Como rodar o projeto
 
 ### Backend (Flask)
