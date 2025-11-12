@@ -8,39 +8,29 @@ CORS(app)
 
 DB_NAME = "database.db"
 
-# -------------------------------
-# Inicialização do banco de dados
-# -------------------------------
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    # Tabela de usuários
     c.execute('''CREATE TABLE IF NOT EXISTS usuarios (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT UNIQUE,
                     senha TEXT)''')
-    # Tabela de transações
     c.execute('''CREATE TABLE IF NOT EXISTS transacoes (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     valor REAL,
                     descricao TEXT,
                     tipo TEXT,
                     usuario_id INTEGER,
+                    categoria_id INTEGER,
                     FOREIGN KEY(usuario_id) REFERENCES usuarios(id))''')
-    # Usuário padrão
     c.execute("INSERT OR IGNORE INTO usuarios (username, senha) VALUES (?, ?)",
               ("test", hashlib.sha256("senha123".encode()).hexdigest()))
     conn.commit()
     conn.close()
 
-# -------------------------------
-# Nova função: garantir tabela de categorias e coluna
-# -------------------------------
 def ensure_categories_column_and_table(db_path):
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
-
-    # Cria tabela de categorias se não existir
     cur.execute("""
         CREATE TABLE IF NOT EXISTS categorias (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,19 +38,13 @@ def ensure_categories_column_and_table(db_path):
             usuario_id INTEGER
         )
     """)
-
-    # Checa se coluna categoria_id existe em transacoes
     cur.execute("PRAGMA table_info(transacoes)")
     cols = [row[1] for row in cur.fetchall()]
     if 'categoria_id' not in cols:
         cur.execute("ALTER TABLE transacoes ADD COLUMN categoria_id INTEGER")
-
     conn.commit()
     conn.close()
 
-# -------------------------------
-# Rotas do sistema
-# -------------------------------
 @app.route("/login", methods=["POST"])
 def login():
     data = request.get_json()
@@ -75,9 +59,6 @@ def login():
         return jsonify({"message": "Login bem-sucedido", "usuario_id": user[0]})
     return jsonify({"error": "Credenciais inválidas"}), 401
 
-# -------------------------------
-# Rotas de Categorias (nova funcionalidade)
-# -------------------------------
 @app.route("/categorias", methods=["POST"])
 def add_categoria():
     data = request.get_json()
@@ -87,9 +68,17 @@ def add_categoria():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute("INSERT INTO categorias (nome, usuario_id) VALUES (?, ?)", (nome, usuario_id))
+    categoria_id = c.lastrowid
+
+    c.execute("""
+        UPDATE transacoes
+        SET categoria_id=?
+        WHERE usuario_id=? AND categoria_id IS NULL AND descricao LIKE ?
+    """, (categoria_id, usuario_id, f"%{nome}%"))
+
     conn.commit()
     conn.close()
-    return jsonify({"message": "Categoria adicionada com sucesso!"})
+    return jsonify({"message": "Categoria adicionada com sucesso e transações antigas vinculadas!"})
 
 @app.route("/categorias/<int:usuario_id>", methods=["GET"])
 def get_categorias(usuario_id):
@@ -100,9 +89,6 @@ def get_categorias(usuario_id):
     conn.close()
     return jsonify(categorias)
 
-# -------------------------------
-# Rotas de Transações (ajustadas para incluir categoria_id)
-# -------------------------------
 @app.route("/transacoes", methods=["POST"])
 def add_transacao():
     data = request.get_json()
@@ -110,7 +96,7 @@ def add_transacao():
     descricao = data.get("descricao")
     tipo = data.get("tipo")
     usuario_id = data.get("usuario_id")
-    categoria_id = data.get("categoria_id")  # novo campo (pode ser None)
+    categoria_id = data.get("categoria_id")
 
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -134,9 +120,43 @@ def get_transacoes(usuario_id):
     conn.close()
     return jsonify(transacoes)
 
-# -------------------------------
-# Inicialização do servidor
-# -------------------------------
+@app.route("/transacoes/<int:usuario_id>/categoria/<int:categoria_id>", methods=["GET"])
+def get_transacoes_por_categoria(usuario_id, categoria_id):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("""
+        SELECT t.id, t.valor, t.descricao, t.tipo, c.nome AS categoria
+        FROM transacoes t
+        LEFT JOIN categorias c ON t.categoria_id = c.id
+        WHERE t.usuario_id=? AND t.categoria_id=?
+    """, (usuario_id, categoria_id))
+    transacoes = [{"id": row[0], "valor": row[1], "descricao": row[2],
+                   "tipo": row[3], "categoria": row[4]} for row in c.fetchall()]
+    conn.close()
+    return jsonify(transacoes)
+
+@app.route("/resumo/<int:usuario_id>", methods=["GET"])
+def resumo_financeiro(usuario_id):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+
+    c.execute("""SELECT SUM(valor) FROM transacoes 
+                 WHERE usuario_id=? AND tipo='receita'""", (usuario_id,))
+    total_receitas = c.fetchone()[0] or 0.0
+
+    c.execute("""SELECT SUM(valor) FROM transacoes 
+                 WHERE usuario_id=? AND tipo='despesa'""", (usuario_id,))
+    total_despesas = c.fetchone()[0] or 0.0
+
+    saldo = total_receitas - total_despesas
+
+    conn.close()
+    return jsonify({
+        "total_receitas": round(total_receitas, 2),
+        "total_despesas": round(total_despesas, 2),
+        "saldo": round(saldo, 2)
+    })
+
 if __name__ == "__main__":
     init_db()
     ensure_categories_column_and_table(DB_NAME)

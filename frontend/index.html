@@ -13,6 +13,13 @@
     <div id="app" style="display:none;">
         <button onclick="logout()" style="float:right;">Logout</button>
 
+        <h2>Resumo Financeiro</h2>
+        <div id="resumo">
+            <p><strong>Total de Receitas:</strong> R$<span id="receitas">0.00</span></p>
+            <p><strong>Total de Despesas:</strong> R$<span id="despesas">0.00</span></p>
+            <p><strong>Saldo:</strong> R$<span id="saldo">0.00</span></p>
+        </div>
+
         <h2>Criar Categoria</h2>
         <input id="novaCategoria" placeholder="Nome da Categoria" />
         <button onclick="addCategoria()">Adicionar Categoria</button>
@@ -29,6 +36,11 @@
         </select>
         <button onclick="addTransacao()">Adicionar</button>
 
+        <h2>Filtrar Transações</h2>
+        <select id="filtroCategoria" onchange="filtrarTransacoes()">
+            <option value="">Todas</option>
+        </select>
+
         <h2>Transações</h2>
         <ul id="lista"></ul>
     </div>
@@ -37,7 +49,6 @@
         const API = "http://127.0.0.1:5000";
         let usuario_id = null;
 
-        // Ao carregar a página, verifica se há usuário logado
         window.onload = () => {
             const usuarioSalvo = localStorage.getItem("usuario_id");
             if (usuarioSalvo) {
@@ -45,12 +56,10 @@
                 document.getElementById("app").style.display = "block";
                 carregarCategorias();
                 carregarTransacoes();
+                carregarResumo();
             }
         }
 
-        // -------------------------
-        // Login
-        // -------------------------
         async function login() {
             const username = document.getElementById("username").value;
             const senha = document.getElementById("senha").value;
@@ -66,14 +75,12 @@
                 document.getElementById("app").style.display = "block";
                 carregarCategorias();
                 carregarTransacoes();
+                carregarResumo();
             } else {
                 alert("Login falhou");
             }
         }
 
-        // -------------------------
-        // Logout
-        // -------------------------
         function logout() {
             localStorage.removeItem("usuario_id");
             usuario_id = null;
@@ -82,9 +89,6 @@
             document.getElementById("senha").value = "";
         }
 
-        // -------------------------
-        // Categorias
-        // -------------------------
         async function addCategoria() {
             const nome = document.getElementById("novaCategoria").value;
             if (!nome) return alert("Digite o nome da categoria");
@@ -100,6 +104,7 @@
         async function carregarCategorias() {
             const res = await fetch(API + "/categorias/" + usuario_id);
             const categorias = await res.json();
+
             const select = document.getElementById("categoriaSelect");
             select.innerHTML = '<option value="">Sem categoria</option>';
             categorias.forEach(cat => {
@@ -108,11 +113,17 @@
                 option.textContent = cat.nome;
                 select.appendChild(option);
             });
+
+            const filtro = document.getElementById("filtroCategoria");
+            filtro.innerHTML = '<option value="">Todas</option>';
+            categorias.forEach(cat => {
+                const option = document.createElement("option");
+                option.value = cat.id;
+                option.textContent = cat.nome;
+                filtro.appendChild(option);
+            });
         }
 
-        // -------------------------
-        // Transações
-        // -------------------------
         async function addTransacao() {
             const valor = parseFloat(document.getElementById("valor").value);
             const descricao = document.getElementById("descricao").value;
@@ -129,6 +140,7 @@
             document.getElementById("descricao").value = "";
             document.getElementById("categoriaSelect").value = "";
             carregarTransacoes();
+            carregarResumo();
         }
 
         async function carregarTransacoes() {
@@ -142,6 +154,35 @@
                                  (t.categoria ? ` - Categoria: ${t.categoria}` : "");
                 ul.appendChild(li);
             });
+        }
+
+        async function filtrarTransacoes() {
+            const categoria_id = document.getElementById("filtroCategoria").value;
+            let url = API + "/transacoes/" + usuario_id;
+            if (categoria_id) url += "/categoria/" + categoria_id;
+
+            const res = await fetch(url);
+            const lista = await res.json();
+            const ul = document.getElementById("lista");
+            ul.innerHTML = "";
+            lista.forEach(t => {
+                const li = document.createElement("li");
+                li.textContent = `${t.tipo.toUpperCase()} - R$${t.valor} (${t.descricao})` +
+                                 (t.categoria ? ` - Categoria: ${t.categoria}` : "");
+                ul.appendChild(li);
+            });
+        }
+
+        async function carregarResumo() {
+            const res = await fetch(API + "/resumo/" + usuario_id);
+            const data = await res.json();
+
+            document.getElementById("receitas").textContent = data.total_receitas.toFixed(2);
+            document.getElementById("despesas").textContent = data.total_despesas.toFixed(2);
+            document.getElementById("saldo").textContent = data.saldo.toFixed(2);
+
+            const saldoSpan = document.getElementById("saldo");
+            saldoSpan.style.color = data.saldo >= 0 ? "green" : "red";
         }
     </script>
 </body>
