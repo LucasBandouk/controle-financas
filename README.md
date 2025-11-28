@@ -28,3 +28,9 @@ O backend estará rodando em `http://127.0.0.1:5000`.
 - Cálculo automático de saldo financeiro
 - Exibição de total de receitas, despesas e saldo no frontend
 - Estilização do saldo (verde para positivo, vermelho para negativo)
+
+### Funcionalidades (Sprint 4)
+
+- Resumo financeiro mensal para gráficos (pizza ou barras)
+- Geração de relatório mensal de receitas e despesas
+- Exportar transações para arquivo CSV
